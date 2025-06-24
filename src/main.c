@@ -213,7 +213,7 @@ int main(void) {
   if (ssd1306_is_enabled()) {
   // show booting screen
 #ifdef BOARD_HAS_SSD1306
-  ssd1306_draw_string_centered(40, "......");
+  ssd1306_draw_string_centered(36, "......");
   ssd1306_display();
 #endif
   }
