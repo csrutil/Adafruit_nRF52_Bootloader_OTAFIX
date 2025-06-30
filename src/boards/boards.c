@@ -36,6 +36,7 @@ extern bool is_ota(void);
 #include "nrf_pwm.h"
 #include "app_scheduler.h"
 #include "app_timer.h"
+#include "dfu.h"  // Include DFU header for progress tracking
 
 #ifdef LED_APA102_CLK
 #include "nrf_spim.h"
@@ -55,9 +56,60 @@ void neopixel_teardown(void);
 //--------------------------------------------------------------------+
 
 static uint32_t _systick_count = 0;
+
+#ifdef BOARD_HAS_SSD1306
+// Ultra-minimal DFU status tracking for SSD1306 display
+static bool dfu_active = false;
+static uint8_t last_shown_progress = 0;
+static bool dfu_header_shown = false;  // Track if header is already displayed
+static bool dfu_completed = false;     // Track if DFU has completed successfully
+#endif
+
 void SysTick_Handler(void) {
   _systick_count++;
   led_tick();
+  
+#ifdef BOARD_HAS_SSD1306
+  // Check progress every 1000ms for higher precision, display every 1%
+  if (dfu_active && (_systick_count % 1000) == 0 && ssd1306_is_enabled()) {
+    uint8_t progress = dfu_get_progress_percentage();
+    
+    // Only show header and switch to progress mode when actual progress starts (>0%)
+    if (progress > 0 && !dfu_header_shown) {
+      ssd1306_clear();
+      ssd1306_draw_string_centered(20, "BLE DFU");
+      dfu_header_shown = true;
+    }
+    
+    // Update progress if it changed by at least 1% and progress has started
+    if (progress > 0 && progress != last_shown_progress) {
+      char progress_str[8];  // Small buffer for progress string
+      
+      // Use simple integer to string conversion to save flash
+      if (progress >= 100) {
+        progress_str[0] = '1'; progress_str[1] = '0'; progress_str[2] = '0'; progress_str[3] = '%'; progress_str[4] = '\0';
+        // Mark DFU as completed when we reach 100% to prevent "Waiting" on BLE disconnect
+        dfu_completed = true;
+      } else if (progress >= 10) {
+        progress_str[0] = '0' + (progress / 10);
+        progress_str[1] = '0' + (progress % 10);
+        progress_str[2] = '%';
+        progress_str[3] = '\0';
+      } else {
+        progress_str[0] = '0' + progress;
+        progress_str[1] = '%';
+        progress_str[2] = '\0';
+      }
+      
+      // Clear only the progress line area before drawing new text
+      ssd1306_draw_rect(0, 36, 128, 8, false);  // Clear line 36 (height 8 pixels)
+      ssd1306_draw_string_centered(36, progress_str);
+      ssd1306_display();
+      
+      last_shown_progress = progress;
+    }
+  }
+#endif
 }
 
 void button_init(uint32_t pin) {
@@ -403,7 +455,6 @@ void led_tick(void) {
 static uint32_t rgb_color;
 static bool temp_color_active = false;
 static uint32_t last_display_state = 0xFFFFFFFF;
-static bool dfu_transfer_active = false;  // Track if DFU transfer is active
 
 void led_state(uint32_t state) {
   uint32_t new_rgb_color = rgb_color;
@@ -438,13 +489,17 @@ void led_state(uint32_t state) {
       primary_cycle_length = 100;
       if (is_ota()) {
 #ifdef BOARD_HAS_SSD1306
-        // Only update display once when DFU transfer starts, not on every packet
-        if (ssd1306_is_enabled() && display_changed && !dfu_transfer_active) {
+        // Start DFU progress tracking when transfer begins
+        if (ssd1306_is_enabled() && display_changed && !dfu_active) {
+          dfu_active = true;
+          dfu_completed = false;  // Reset completion status for new DFU session
+          dfu_header_shown = false;  // Reset header flag for new DFU session
+          last_shown_progress = 0;   // Reset progress tracking
+          // Show initial waiting state immediately
           ssd1306_clear();
           ssd1306_draw_string_centered(20, "BLE DFU");
-          ssd1306_draw_string_centered(36, "Uploading");
+          ssd1306_draw_string_centered(36, "Waiting");
           ssd1306_display();
-          dfu_transfer_active = true;  // Mark transfer as active to avoid further updates
         }
 #endif
       } 
@@ -453,7 +508,21 @@ void led_state(uint32_t state) {
     case STATE_WRITING_FINISHED:
       // Empty means to unset any temp colors.
       primary_cycle_length = 3000;
-      dfu_transfer_active = false;  // Reset transfer flag
+#ifdef BOARD_HAS_SSD1306
+      if (dfu_active) {
+        // Final completion display
+        if (ssd1306_is_enabled()) {
+          ssd1306_clear();
+          ssd1306_draw_string_centered(20, "BLE DFU");
+          ssd1306_draw_string_centered(36, "Done");
+          ssd1306_display();
+        }
+        dfu_completed = true;   // Mark DFU as completed
+        dfu_active = false;
+        dfu_header_shown = false;  // Reset for next session
+        last_shown_progress = 0;
+      }
+#endif
       break;
 
     case STATE_BLE_CONNECTED:
@@ -464,12 +533,13 @@ void led_state(uint32_t state) {
       primary_cycle_length = 3000;
       #endif
 #ifdef BOARD_HAS_SSD1306
-          if (ssd1306_is_enabled()) {
-            ssd1306_clear();
-            ssd1306_draw_string_centered(20, "BLE DFU");
-            ssd1306_draw_string_centered(36, "Connected");
-            ssd1306_display();
-          }
+      if (ssd1306_is_enabled() && display_changed) {
+        dfu_completed = false;  // Reset completion status for new connection
+        ssd1306_clear();
+        ssd1306_draw_string_centered(20, "BLE DFU");
+        ssd1306_draw_string_centered(36, "Connected");
+        ssd1306_display();
+      }
 #endif
       break;
 
@@ -479,20 +549,25 @@ void led_state(uint32_t state) {
       secondary_cycle_length = 300;
       #else
       primary_cycle_length = 300;
-#ifdef BOARD_HAS_SSD1306
-          if (ssd1306_is_enabled()) {
-            ssd1306_clear();
-            ssd1306_draw_string_centered(20, "BLE DFU");
-            ssd1306_draw_string_centered(36, "Waiting");
-            ssd1306_display();
-          }
-#endif
       #endif
+#ifdef BOARD_HAS_SSD1306
+      // Only show "Waiting" if DFU hasn't completed yet
+      if (ssd1306_is_enabled() && display_changed && !dfu_completed) {
+        ssd1306_clear();
+        ssd1306_draw_string_centered(20, "BLE DFU");
+        ssd1306_draw_string_centered(36, "Waiting");
+        ssd1306_display();
+      }
+#endif
       break;
 
     default:
       break;
   }
+  
+  // Update the last display state
+  last_display_state = state;
+  
   uint8_t* final_color = NULL;
   new_rgb_color &= BOARD_RGB_BRIGHTNESS;
   if (temp_color != 0) {

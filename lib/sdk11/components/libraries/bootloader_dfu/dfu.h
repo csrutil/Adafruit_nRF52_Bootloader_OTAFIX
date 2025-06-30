@@ -97,6 +97,15 @@ uint32_t dfu_image_activate(void);
  */
 void dfu_reset(void);
 
+/**@brief Function for getting DFU upload progress percentage.
+ *        
+ * @details This function returns the current upload progress as a percentage (0-100).
+ *          It can be used to display progress information to the user.
+ *
+ * @return    Progress percentage (0-100), or 0 if no upload in progress.
+ */
+uint8_t dfu_get_progress_percentage(void);
+
 /**@brief Function for validating that new bootloader has been correctly installed.
  *        
  * @return NRF_SUCCESS if install was successful. NRF_ERROR_NULL if the images differs.

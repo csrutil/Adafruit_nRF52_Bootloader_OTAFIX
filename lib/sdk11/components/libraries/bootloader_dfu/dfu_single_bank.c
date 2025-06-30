@@ -727,3 +727,21 @@ uint32_t dfu_sd_image_validate(void)
 
     return sd_mbr_command(&sd_mbr_cmd);
 }
+
+uint8_t dfu_get_progress_percentage(void)
+{
+    // If no image size set or no data received, return 0
+    if (m_image_size == 0 || m_data_received == 0)
+    {
+        return 0;
+    }
+    
+    // Calculate percentage, ensuring it doesn't exceed 100
+    uint32_t percentage = (m_data_received * 100) / m_image_size;
+    if (percentage > 100)
+    {
+        percentage = 100;
+    }
+    
+    return (uint8_t)percentage;
+}
