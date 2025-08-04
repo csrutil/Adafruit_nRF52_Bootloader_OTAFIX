@@ -51,6 +51,12 @@
 //--------------------------------------------------------------------+
 #define I2C_SDA_PIN           _PINNUM(0, 13)  // P0.13 - I2C SDA
 #define I2C_SCL_PIN           _PINNUM(0, 14)  // P0.14 - I2C SCL
+#define SSD1306_I2C_ADDR      0x3C            // SSD1306 OLED Display I2C Address
+
+// SSD1306 display configuration (默认配置)
+#define SSD1306_COM_PINS      0x12            // Alternative COM pin configuration
+#define SSD1306_SEGMENT_REMAP 0xA1            // Segment remap 
+#define SSD1306_COM_SCAN_DIR  0xC8            // Reverse COM scan direction
 
 //--------------------------------------------------------------------+
 // BLE OTA
@@ -70,5 +76,7 @@
 #define UF2_VOLUME_LABEL      "GAT562-BOOT"
 #define UF2_BOARD_ID          "GAT562-Board"
 #define UF2_INDEX_URL         "http://www.gat-iot.com"
+
+#define BRAND_NAME "GAT IOT"
 
 #endif // _GAT562_BOARD_H

@@ -183,10 +183,8 @@ int main(void) {
   if (ssd1306_init()) {
     PRINTF("SSD1306 init success\r\n");
     // 显示中字体启动画面，优化：减少到200ms
-    #ifdef BOARD_MT001
-    ssd1306_draw_string_centered(26, "Meshtiny");
-    #elif BOARD_GAT562
-    ssd1306_draw_string_centered(26, "GAT562");
+    #ifdef BRAND_NAME
+    ssd1306_draw_string_centered(26, BRAND_NAME);
     #else
     ssd1306_draw_string_centered(26, "nRF52840");
     #endif

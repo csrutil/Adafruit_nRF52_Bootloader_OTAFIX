@@ -6,8 +6,6 @@
 #include "nrf_delay.h"
 #include <string.h>
 
-#define SSD1306_I2C_ADDR 0x3C
-
 static const nrfx_twi_t twi = NRFX_TWI_INSTANCE(0);
 static bool twi_initialized = false;
 
