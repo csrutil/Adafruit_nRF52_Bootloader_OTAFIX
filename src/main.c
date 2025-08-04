@@ -52,6 +52,7 @@
 #include "nrf.h"
 #include "nrf_soc.h"
 #include "nrf_nvic.h"
+#include "nrf_delay.h"
 #include "app_error.h"
 #include "nrf_gpio.h"
 #include "ble.h"
@@ -182,20 +183,18 @@ int main(void) {
 #ifdef BOARD_HAS_SSD1306
   if (ssd1306_init()) {
     PRINTF("SSD1306 init success\r\n");
-    // 显示中字体启动画面，优化：减少到200ms
     #ifdef BRAND_NAME
-    ssd1306_draw_string_centered(26, BRAND_NAME);
+    ssd1306_draw_string_centered(24, BRAND_NAME);
     #else
-    ssd1306_draw_string_centered(26, "nRF52840");
+    ssd1306_draw_string_centered(24, "nRF52");
     #endif
     ssd1306_display();
-    // 显示启动画面300毫秒
-    NRFX_DELAY_MS(300);
+    NRFX_DELAY_MS(200);
   } else {
     PRINTF("SSD1306 init failed\r\n");
   }
 #endif
-  PRINTF("Bootloader Start\r\n");
+  // PRINTF("Bootloader Start\r\n");
   led_state(STATE_BOOTLOADER_STARTED);
 
   // When updating SoftDevice, bootloader will reset before swapping SD
@@ -209,9 +208,8 @@ int main(void) {
   }
 #ifdef BOARD_HAS_SSD1306
   if (ssd1306_is_enabled()) {
-  // show booting screen
 #ifdef BOARD_HAS_SSD1306
-  ssd1306_draw_string_centered(36, "......");
+  ssd1306_draw_string_centered(34, "......");
   ssd1306_display();
 #endif
   }
@@ -221,7 +219,6 @@ int main(void) {
   // Return when DFU process is complete (or not entered at all)
   check_dfu_mode();
 
-  // Reset peripherals
   board_teardown();
 
   /* Jump to application if valid

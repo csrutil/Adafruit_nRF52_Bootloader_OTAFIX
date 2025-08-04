@@ -5,19 +5,37 @@
 #include "font_8x8.h"
 #include "nrf_delay.h"
 #include <string.h>
+#include <stdlib.h> 
+
+// Configuration: Choose display method based on hardware
+// Board-specific configuration
+#ifdef BOARD_HAS_CH1116G
+// CH1116G controller (SSD1306 compatible) has some addressing differences
+// Use paged method for better text display and special handling for rightmost columns
+#endif
 
 static uint8_t ssd1306_buffer[SSD1306_WIDTH * SSD1306_HEIGHT / 8];
 static bool display_enabled = false;
 
+// fix some wrong cmd not good with this screen (commited by Dylan)
 bool ssd1306_init(void) {
-    // 初始化I2C通信
     if (!ssd1306_comm_init()) {
         display_enabled = false;
         return false;
     }
     
-    // SSD1306初始化序列
+    display_enabled = true;
+
+    // Hardware reset sequence - critical for reset from application
     ssd1306_write_command(0xAE); // Display off
+    nrf_delay_ms(10);
+    
+    // Disable charge pump to ensure complete reset
+    ssd1306_write_command(0x8D); 
+    ssd1306_write_command(0x10); 
+    nrf_delay_ms(10);
+    
+    // SSD1306 initialization sequence (restored from original working code)
     ssd1306_write_command(0xD5); // Set display clock divide ratio
     ssd1306_write_command(0x80); // Default ratio
     ssd1306_write_command(0xA8); // Set multiplex ratio
@@ -42,33 +60,92 @@ bool ssd1306_init(void) {
     ssd1306_write_command(0xA4); // Entire display ON (resume to RAM content)
     ssd1306_write_command(0xA6); // Set normal display (not inverted)
     
-    // 清屏
+    // Clear screen
     ssd1306_clear();
     
-    // 开启显示
     ssd1306_write_command(0xAF); // Display on
-    
-    display_enabled = true;
     
     return true;
 }
 
 void ssd1306_uninit(void) {
     if (display_enabled) {
-        ssd1306_write_command(0xAE); // Display off
-        ssd1306_comm_uninit();
+        // Simply mark as disabled, don't touch hardware here
+        // Hardware reset is handled in board_teardown()
         display_enabled = false;
     }
 }
 
-void ssd1306_clear(void) {
+// Method 1: Fast clear using the fast display method
+void ssd1306_clear_fast(void) {
     if (!display_enabled) return;
     
     memset(ssd1306_buffer, 0, sizeof(ssd1306_buffer));
-    ssd1306_display();
+    ssd1306_display_fast();
 }
 
-void ssd1306_display(void) {
+// Method 2: Hardware clear directly on display (for stubborn displays)
+void ssd1306_clear_hardware(void) {
+    if (!display_enabled) return;
+    
+    // Clear buffer first
+    memset(ssd1306_buffer, 0, sizeof(ssd1306_buffer));
+    
+#ifdef BOARD_HAS_CH1116G
+    // CH1116G specific clearing: Use horizontal addressing for better coverage
+    ssd1306_write_command(0x20); // Memory addressing mode
+    ssd1306_write_command(0x00); // Horizontal addressing mode
+    
+    // Set full column and page range
+    ssd1306_write_command(0x21); // Column address
+    ssd1306_write_command(0x00); // Start column 0
+    ssd1306_write_command(0x7F); // End column 127
+    ssd1306_write_command(0x22); // Page address  
+    ssd1306_write_command(0x00); // Start page 0
+    ssd1306_write_command(0x07); // End page 7
+    
+    // Send zeros to clear entire display
+    ssd1306_write_data(ssd1306_buffer, sizeof(ssd1306_buffer));
+    nrf_delay_ms(20);
+    
+    // Additional page-by-page clearing for CH1116G edge cases
+    for (uint8_t page = 0; page < 8; page++) {
+        ssd1306_write_command(0xB0 + page); // Set page address
+        ssd1306_write_command(0x00);        // Lower column start
+        ssd1306_write_command(0x10);        // Higher column start
+        
+        // Send 132 bytes for CH1116G (some variants need padding)
+        uint8_t extended_clear[132] = {0};
+        ssd1306_write_data(extended_clear, 132);
+        nrf_delay_ms(5);
+    }
+#else
+    // Standard SSD1306 page-by-page clearing
+    for (uint8_t page = 0; page < 8; page++) {
+        ssd1306_write_command(0xB0 + page); // Set page address
+        ssd1306_write_command(0x00);        // Lower column start
+        ssd1306_write_command(0x10);        // Higher column start
+        
+        // Send 128 bytes to clear the page
+        uint8_t clear_data[128] = {0};
+        ssd1306_write_data(clear_data, 128);
+        nrf_delay_ms(5);
+    }
+#endif
+}
+
+// Default clear method - calls the appropriate method based on configuration
+void ssd1306_clear(void) {
+#ifdef BOARD_HAS_CH1116G
+    ssd1306_clear_hardware(); // Use hardware clear for CH1116G
+#else
+    ssd1306_clear_fast();      // Use fast clear for standard SSD1306
+#endif
+}
+
+// Method 1: Fast update using column/page address ranges (original method)
+// Best for most SSD1306 displays, more efficient
+void ssd1306_display_fast(void) {
     if (!display_enabled) return;
     
     // 设置列地址范围
@@ -85,18 +162,42 @@ void ssd1306_display(void) {
     ssd1306_write_data(ssd1306_buffer, sizeof(ssd1306_buffer));
 }
 
-void ssd1306_draw_rect(uint8_t x, uint8_t y, uint8_t width, uint8_t height, bool fill) {
-    if (!display_enabled || x >= SSD1306_WIDTH || y >= SSD1306_HEIGHT) return;
+// Method 2: Page-by-page update (alternative method)
+// Use for displays that have issues with address range commands
+void ssd1306_display_paged(void) {
+    if (!display_enabled) return;
     
-    // 确保矩形在屏幕范围内
-    if (x + width > SSD1306_WIDTH) width = SSD1306_WIDTH - x;
-    if (y + height > SSD1306_HEIGHT) height = SSD1306_HEIGHT - y;
-    
-    for (uint8_t i = 0; i < width; i++) {
-        for (uint8_t j = 0; j < height; j++) {
-            ssd1306_set_pixel(x + i, y + j, fill);
+    for (uint8_t page = 0; page < 8; page++) {
+        ssd1306_write_command(0xB0 + page); // Set page address
+        ssd1306_write_command(0x00);        // Lower column start
+        ssd1306_write_command(0x10);        // Higher column start
+        
+        // Send the page data
+        ssd1306_write_data(&ssd1306_buffer[page * SSD1306_WIDTH], SSD1306_WIDTH);
+        
+#ifdef BOARD_HAS_CH1116G
+        // For CH1116G: ensure the last 2 columns are properly addressed
+        if (page < 8) { // Additional safety check
+            ssd1306_write_command(0x0E);        // Column 126 low bits
+            ssd1306_write_command(0x17);        // Column 126 high bits
+            
+            // Resend the last 2 bytes to ensure they're displayed
+            uint8_t last_cols[2];
+            last_cols[0] = ssd1306_buffer[page * SSD1306_WIDTH + 126];
+            last_cols[1] = ssd1306_buffer[page * SSD1306_WIDTH + 127];
+            ssd1306_write_data(last_cols, 2);
         }
+#endif
     }
+}
+
+// Default display method - calls the appropriate method based on configuration
+void ssd1306_display(void) {
+#ifdef BOARD_HAS_CH1116G
+    ssd1306_display_paged(); // Use paged method for CH1116G (better text display)
+#else
+    ssd1306_display_fast();  // Use fast method for standard SSD1306
+#endif
 }
 
 void ssd1306_set_pixel(uint8_t x, uint8_t y, bool on) {
@@ -148,10 +249,8 @@ void ssd1306_draw_string_centered(uint8_t y, const char* str) {
     
     uint8_t total_width = len * 8;
     if (total_width > SSD1306_WIDTH) {
-        // 字符串太长，从左边开始显示
         ssd1306_draw_string(0, y, str);
     } else {
-        // 居中显示
         uint8_t x = (SSD1306_WIDTH - total_width) / 2;
         ssd1306_draw_string(x, y, str);
     }

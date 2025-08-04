@@ -72,9 +72,9 @@
 #define USB_DESC_CDC_ONLY_PID  0x002A
 
 //------------- UF2 -------------//
-#define UF2_PRODUCT_NAME      "MeshTiny Board"
-#define UF2_VOLUME_LABEL      "MeshTiny"
-#define UF2_BOARD_ID          "MeshTiny-MT001-Board"
+#define UF2_PRODUCT_NAME      "Meshtiny Board"
+#define UF2_VOLUME_LABEL      "Meshtiny"
+#define UF2_BOARD_ID          "Meshtiny-MT001-Board"
 #define UF2_INDEX_URL         "https://shop.mtoolstec.com"
 
 #define BRAND_NAME "MTools Tec"

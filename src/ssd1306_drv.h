@@ -13,15 +13,17 @@
 // 初始化和基础功能
 bool ssd1306_init(void);
 void ssd1306_uninit(void);
-void ssd1306_clear(void);
-void ssd1306_display(void);
+void ssd1306_clear(void);             // Default clear method
+void ssd1306_clear_fast(void);        // Fast clear using buffer + fast display
+void ssd1306_clear_hardware(void);    // Hardware clear for stubborn displays
+void ssd1306_display(void);           // Default display method
+void ssd1306_display_fast(void);      // Fast update using column/page address ranges
+void ssd1306_display_paged(void);     // Page-by-page update for problematic displays
 
 // 文字显示功能 (8x8字体)
 void ssd1306_draw_char(uint8_t x, uint8_t y, char c);
 void ssd1306_draw_string(uint8_t x, uint8_t y, const char* str);
 void ssd1306_draw_string_centered(uint8_t y, const char* str);
-
-void ssd1306_draw_rect(uint8_t x, uint8_t y, uint8_t width, uint8_t height, bool fill);
 
 // 设置像素
 void ssd1306_set_pixel(uint8_t x, uint8_t y, bool on);

@@ -24,10 +24,12 @@
 
 #include "app_error.h"
 #include "nrf_gpio.h"
+#include "nrf_delay.h"
 #include "boards.h"
 
 #ifdef BOARD_HAS_SSD1306
 #include "ssd1306_drv.h"
+#include "ssd1306_comm.h"
 #endif
 
 // Forward declaration  
@@ -112,8 +114,12 @@ void SysTick_Handler(void) {
       int bar_y = 36;
       int text_x = bar_x + bar_w + gap;
       
-      // Clear the entire progress area first
-      ssd1306_draw_rect(0, bar_y - 2, 128, bar_h + 4, false);
+      // Clear progress area by clearing pixel rows
+      for (int y = bar_y - 2; y < bar_y + bar_h + 2; y++) {
+        for (int x = 0; x < 128; x++) {
+          ssd1306_set_pixel(x, y, false);
+        }
+      }
       
       // Draw progress bar border (outline only)
       // Top and bottom lines
@@ -130,7 +136,11 @@ void SysTick_Handler(void) {
       // Fill progress bar
       int fill_w = (progress * (bar_w - 2)) / 100; // -2 for border
       if (fill_w > 0) {
-        ssd1306_draw_rect(bar_x + 1, bar_y + 1, fill_w, bar_h - 2, true);
+        for (int y = 1; y < bar_h - 1; y++) {
+          for (int x = 1; x < fill_w + 1; x++) {
+            ssd1306_set_pixel(bar_x + x, bar_y + y, true);
+          }
+        }
       }
       
       // Draw percentage text
@@ -262,6 +272,15 @@ void board_teardown(void) {
   // make sure all pins are back in reset state
   // NUMBER_OF_PINS is defined in nrf_gpio.h
   for (int i = 0; i < NUMBER_OF_PINS; ++i) {
+#ifdef BOARD_HAS_SSD1306
+    // For SSD1306 boards, we need to carefully handle I2C pins
+    // Set I2C pins to output high to ensure clean state for next initialization
+    if (i == I2C_SDA_PIN || i == I2C_SCL_PIN) {
+      nrf_gpio_cfg_output(i);
+      nrf_gpio_pin_set(i);  // Pull both SDA and SCL high for clean state
+      continue;
+    }
+#endif
     nrf_gpio_cfg_default(i);
   }
 
