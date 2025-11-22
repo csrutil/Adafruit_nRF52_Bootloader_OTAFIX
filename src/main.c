@@ -183,6 +183,7 @@ int main(void) {
 #ifdef BOARD_HAS_SSD1306
   if (ssd1306_init()) {
     PRINTF("SSD1306 init success\r\n");
+/*
     #ifdef BRAND_NAME
     ssd1306_draw_string_centered(24, BRAND_NAME);
     #else
@@ -190,6 +191,7 @@ int main(void) {
     #endif
     ssd1306_display();
     NRFX_DELAY_MS(200);
+*/
   } else {
     PRINTF("SSD1306 init failed\r\n");
   }
@@ -209,8 +211,10 @@ int main(void) {
 #ifdef BOARD_HAS_SSD1306
   if (ssd1306_is_enabled()) {
 #ifdef BOARD_HAS_SSD1306
+/*
   ssd1306_draw_string_centered(34, "......");
   ssd1306_display();
+*/
 #endif
   }
 #endif
@@ -317,6 +321,10 @@ static void check_dfu_mode(void) {
   // Enter DFU mode accordingly to input
   if (dfu_start || !valid_app) {
     if (_ota_dfu) {
+      #ifdef DISPLAY_PIN_SCK
+        board_display_init();
+        screen_draw_ble();
+      #endif
       led_state(STATE_BLE_DISCONNECTED);
       if (!_sd_inited) mbr_init_sd();
       _sd_inited = true;

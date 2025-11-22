@@ -510,10 +510,12 @@ static uint32_t last_display_state = 0xFFFFFFFF;
 void led_state(uint32_t state) {
   uint32_t new_rgb_color = rgb_color;
   uint32_t temp_color = 0;
-  
+
+#ifdef BOARD_HAS_SSD1306
   // 只有状态改变时才更新显示内容
   bool display_changed = (last_display_state != state);
-  
+#endif
+
   switch (state) {
     case STATE_USB_MOUNTED:
       new_rgb_color = 0x00ff00;
